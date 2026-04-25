@@ -1,0 +1,1381 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🗾 Japan Reiseplaner</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --red: #BC002D;
+  --red-hover: #E0003A;
+  --red-light: #FFF0F3;
+  --bg: #F2F1EE;
+  --surface: #FFFFFF;
+  --surface-2: #F7F6F3;
+  --border: #E4E2DC;
+  --text: #1C1C1C;
+  --text-muted: #6B6869;
+  --shadow: 0 2px 8px rgba(0,0,0,0.07);
+  --shadow-lg: 0 8px 28px rgba(0,0,0,0.10);
+  --radius: 12px;
+  --radius-sm: 8px;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+/* ── HEADER ─────────────────────────────────── */
+.header {
+  background: var(--red);
+  color: white;
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 2px 12px rgba(188,0,45,0.25);
+  position: sticky;
+  top: 0;
+  z-index: 500;
+}
+.header-flag { font-size: 26px; line-height: 1; }
+.header h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.2px; }
+.header-status {
+  margin-left: auto;
+  font-size: 12px;
+  opacity: 0.85;
+  background: rgba(255,255,255,0.15);
+  padding: 4px 10px;
+  border-radius: 20px;
+  max-width: 380px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── LAYOUT ──────────────────────────────────── */
+.dashboard {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 1700px;
+  margin: 0 auto;
+}
+
+/* TOP ROW */
+.top-row {
+  display: grid;
+  grid-template-columns: 1fr 270px;
+  gap: 16px;
+  height: 460px;
+}
+
+.map-wrap {
+  position: relative;
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+}
+
+#map {
+  width: 100%;
+  height: 100%;
+}
+
+.map-hint {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(255,255,255,0.92);
+  border-radius: 20px;
+  padding: 5px 14px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  box-shadow: var(--shadow);
+  pointer-events: none;
+  z-index: 1000;
+  transition: opacity 0.3s;
+}
+.map-hint.hidden { opacity: 0; }
+
+/* ── CATEGORIES PANEL ────────────────────────── */
+.cat-panel {
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  overflow-y: auto;
+}
+.cat-panel-title {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.9px;
+  color: var(--text-muted);
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 2px;
+}
+.cat-btn {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 11px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid transparent;
+  background: var(--surface-2);
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text);
+  text-align: left;
+  width: 100%;
+  transition: all 0.13s ease;
+  user-select: none;
+}
+.cat-btn:hover { background: var(--red-light); border-color: #FFAABB; color: var(--red); }
+.cat-btn.active { background: var(--red); border-color: var(--red); color: white; }
+.cat-icon { font-size: 17px; width: 22px; text-align: center; flex-shrink: 0; }
+.cat-name { flex: 1; font-weight: 500; }
+.cat-count {
+  font-size: 11px;
+  background: rgba(0,0,0,0.08);
+  border-radius: 10px;
+  padding: 1px 7px;
+  font-weight: 600;
+  min-width: 20px;
+  text-align: center;
+}
+.cat-btn.active .cat-count { background: rgba(255,255,255,0.22); }
+.cat-divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
+
+/* ── TABLES ROW ──────────────────────────────── */
+.tables-row {
+  display: grid;
+  grid-template-columns: 2.2fr 1fr 1fr 1.2fr;
+  gap: 16px;
+  align-items: start;
+}
+
+/* ── TABLE CARD ──────────────────────────────── */
+.tcard {
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.tcard-head {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--surface);
+}
+.tcard-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.badge {
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--bg);
+  color: var(--text-muted);
+  border-radius: 10px;
+  padding: 2px 8px;
+}
+.add-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  background: var(--red);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  font-weight: 600;
+  transition: background 0.13s;
+  white-space: nowrap;
+}
+.add-btn:hover { background: var(--red-hover); }
+
+.tcard-body {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: 310px;
+}
+
+table { width: 100%; border-collapse: collapse; }
+
+thead th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-2);
+  padding: 7px 11px;
+  text-align: left;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+thead th.sortable::after { content: ' ↕'; opacity: 0.35; font-size: 9px; }
+thead th.sort-asc::after { content: ' ↑'; opacity: 1; color: var(--red); }
+thead th.sort-desc::after { content: ' ↓'; opacity: 1; color: var(--red); }
+thead th:hover { color: var(--red); }
+
+tbody tr {
+  border-bottom: 1px solid var(--border);
+  transition: background 0.08s;
+}
+tbody tr:last-child { border-bottom: none; }
+tbody tr:hover { background: var(--surface-2); }
+
+tbody td {
+  padding: 7px 11px;
+  vertical-align: middle;
+}
+
+/* Checkbox column */
+.col-chk { width: 36px; text-align: center; padding: 7px 6px !important; }
+.col-chk input[type=checkbox] {
+  width: 15px; height: 15px;
+  cursor: pointer;
+  accent-color: var(--red);
+}
+
+/* Hidden row */
+tbody tr.is-hidden { opacity: 0.38; }
+tbody tr.is-hidden td:not(.col-chk) { text-decoration: line-through; text-decoration-color: #aaa; }
+
+/* Category tag */
+.cat-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.was-cell {
+  max-width: 180px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+/* Delete btn */
+.del-btn {
+  background: none; border: none; color: var(--text-muted);
+  cursor: pointer; padding: 2px 5px; border-radius: 4px;
+  font-size: 13px; opacity: 0; transition: all 0.1s;
+  line-height: 1;
+}
+tr:hover .del-btn { opacity: 1; }
+.del-btn:hover { background: #FFEBEE; color: #C62828; }
+
+.col-del { width: 28px; padding: 0 4px !important; }
+
+/* Kaufen: checked = gekauft (strike) */
+tbody tr.gekauft { opacity: 0.45; }
+tbody tr.gekauft td:not(.col-chk) { text-decoration: line-through; }
+
+/* Empty state */
+.empty-msg {
+  text-align: center;
+  padding: 22px 16px;
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+/* ── MODAL ───────────────────────────────────── */
+.overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.38);
+  z-index: 9999;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(3px);
+}
+.overlay.open { display: flex; }
+
+.modal {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 26px;
+  width: 500px;
+  max-width: 96vw;
+  max-height: 92vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+  animation: popIn 0.18s ease;
+}
+@keyframes popIn {
+  from { transform: translateY(16px) scale(0.98); opacity: 0; }
+  to   { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+.modal-title {
+  font-size: 17px;
+  font-weight: 700;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fgroup { margin-bottom: 15px; }
+.fgroup label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-muted);
+  margin-bottom: 5px;
+}
+.fgroup input,
+.fgroup select,
+.fgroup textarea {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--surface);
+  outline: none;
+  transition: border-color 0.13s;
+}
+.fgroup input:focus,
+.fgroup select:focus,
+.fgroup textarea:focus { border-color: var(--red); }
+.fgroup textarea { resize: vertical; min-height: 72px; }
+.frow { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.coord-tip {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin-top: 5px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* Map-click picker */
+.pick-map-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 13px;
+  border: 1.5px dashed var(--border);
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 12.5px;
+  font-family: inherit;
+  color: var(--text-muted);
+  width: 100%;
+  transition: all 0.13s;
+  margin-bottom: 10px;
+}
+.pick-map-btn:hover,
+.pick-map-btn.active {
+  border-color: var(--red);
+  color: var(--red);
+  background: var(--red-light);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.btn-cancel {
+  padding: 9px 18px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: none;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  font-weight: 500;
+  color: var(--text);
+  transition: all 0.13s;
+}
+.btn-cancel:hover { background: var(--surface-2); }
+.btn-save {
+  padding: 9px 22px;
+  background: var(--red);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  font-weight: 700;
+  transition: background 0.13s;
+}
+.btn-save:hover { background: var(--red-hover); }
+
+/* KML import button */
+.kml-import-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.kml-import-wrap label { cursor: pointer; color: var(--red); font-weight: 600; text-decoration: underline; }
+#kml-file-input { display: none; }
+
+/* Responsive */
+@media (max-width: 1200px) {
+  .tables-row { grid-template-columns: 1fr 1fr; }
+  .top-row { grid-template-columns: 1fr 230px; }
+}
+@media (max-width: 900px) {
+  .top-row { grid-template-columns: 1fr; height: auto; }
+  #map { height: 350px; }
+  .tables-row { grid-template-columns: 1fr; }
+}
+
+/* Leaflet popup tweak */
+.leaflet-popup-content-wrapper {
+  border-radius: 10px !important;
+  box-shadow: var(--shadow-lg) !important;
+}
+.leaflet-popup-content { font-family: 'Inter', sans-serif !important; font-size: 13px !important; }
+.popup-name { font-weight: 700; font-size: 14px; margin-bottom: 3px; }
+.popup-ort { color: var(--text-muted); font-size: 12px; margin-bottom: 5px; }
+.popup-was { font-size: 12px; color: #444; border-top: 1px solid var(--border); padding-top: 5px; margin-top: 4px; }
+.popup-cat {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; font-weight: 600;
+  padding: 2px 8px; border-radius: 10px;
+  margin-top: 5px;
+}
+
+/* Picking mode cursor */
+body.picking-mode #map { cursor: crosshair !important; }
+body.picking-mode .leaflet-interactive { cursor: crosshair !important; }
+
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+  <span class="header-flag">🗾</span>
+  <h1>Japan Reiseplaner</h1>
+  <span class="header-status" id="status-text">Karte wird initialisiert…</span>
+</header>
+
+<!-- DASHBOARD -->
+<div class="dashboard">
+
+  <!-- TOP ROW: Map + Categories -->
+  <div class="top-row">
+
+    <div class="map-wrap">
+      <div id="map"></div>
+      <div class="map-hint" id="map-hint">Klicke auf einen Marker für Details</div>
+    </div>
+
+    <div class="cat-panel">
+      <div class="cat-panel-title">Kategorien</div>
+
+      <button class="cat-btn active" data-cat="all" onclick="filterCat('all',this)">
+        <span class="cat-icon">🗾</span>
+        <span class="cat-name">Alle anzeigen</span>
+        <span class="cat-count" id="cnt-all">0</span>
+      </button>
+
+      <hr class="cat-divider">
+
+      <div id="cat-list"></div>
+
+      <hr class="cat-divider" style="margin-top:auto">
+
+      <!-- KML import fallback -->
+      <div class="kml-import-wrap">
+        <span>KML importieren:</span>
+        <label for="kml-file-input">Datei wählen</label>
+        <input type="file" id="kml-file-input" accept=".kml,.kmz" onchange="importKML(this)">
+      </div>
+    </div>
+
+  </div>
+
+  <!-- TABLES -->
+  <div class="tables-row">
+
+    <!-- ORTE -->
+    <div class="tcard">
+      <div class="tcard-head">
+        <div class="tcard-title">📍 Orte <span class="badge" id="cnt-orte">0</span></div>
+        <button class="add-btn" onclick="openModal('orte')">＋ Hinzufügen</button>
+      </div>
+      <div class="tcard-body">
+        <table>
+          <thead>
+            <tr>
+              <th class="col-chk"></th>
+              <th class="sortable" onclick="sortTable('orte','kategorie',this)">Kategorie</th>
+              <th class="sortable" onclick="sortTable('orte','ort',this)">Ort</th>
+              <th class="sortable" onclick="sortTable('orte','name',this)">Name</th>
+              <th class="sortable" onclick="sortTable('orte','was',this)">Was</th>
+              <th class="col-del"></th>
+            </tr>
+          </thead>
+          <tbody id="tbody-orte"></tbody>
+        </table>
+        <div class="empty-msg" id="empty-orte">Noch keine Orte eingetragen</div>
+      </div>
+    </div>
+
+    <!-- EKI -->
+    <div class="tcard">
+      <div class="tcard-head">
+        <div class="tcard-title">🚃 Eki <span class="badge" id="cnt-eki">0</span></div>
+        <button class="add-btn" onclick="openModal('eki')">＋ Hinzufügen</button>
+      </div>
+      <div class="tcard-body">
+        <table>
+          <thead>
+            <tr>
+              <th class="col-chk"></th>
+              <th class="sortable" onclick="sortTable('eki','ort',this)">Ort</th>
+              <th class="sortable" onclick="sortTable('eki','name',this)">Name</th>
+              <th class="col-del"></th>
+            </tr>
+          </thead>
+          <tbody id="tbody-eki"></tbody>
+        </table>
+        <div class="empty-msg" id="empty-eki">Noch keine Bahnhöfe eingetragen</div>
+      </div>
+    </div>
+
+    <!-- GOSHUIN -->
+    <div class="tcard">
+      <div class="tcard-head">
+        <div class="tcard-title">御朱印 Goshuin <span class="badge" id="cnt-goshuin">0</span></div>
+        <button class="add-btn" onclick="openModal('goshuin')">＋ Hinzufügen</button>
+      </div>
+      <div class="tcard-body">
+        <table>
+          <thead>
+            <tr>
+              <th class="col-chk"></th>
+              <th class="sortable" onclick="sortTable('goshuin','ort',this)">Ort</th>
+              <th class="sortable" onclick="sortTable('goshuin','name',this)">Name</th>
+              <th class="col-del"></th>
+            </tr>
+          </thead>
+          <tbody id="tbody-goshuin"></tbody>
+        </table>
+        <div class="empty-msg" id="empty-goshuin">Noch keine Goshuin-Orte eingetragen</div>
+      </div>
+    </div>
+
+    <!-- KAUFEN -->
+    <div class="tcard">
+      <div class="tcard-head">
+        <div class="tcard-title">🛍️ Kaufen <span class="badge" id="cnt-kaufen">0</span></div>
+        <button class="add-btn" onclick="openModal('kaufen')">＋ Hinzufügen</button>
+      </div>
+      <div class="tcard-body">
+        <table>
+          <thead>
+            <tr>
+              <th class="col-chk"></th>
+              <th class="sortable" onclick="sortTable('kaufen','name',this)">Name</th>
+              <th class="sortable" onclick="sortTable('kaufen','was',this)">Was</th>
+              <th class="sortable" onclick="sortTable('kaufen','wo',this)">Wo</th>
+              <th class="col-del"></th>
+            </tr>
+          </thead>
+          <tbody id="tbody-kaufen"></tbody>
+        </table>
+        <div class="empty-msg" id="empty-kaufen">Noch keine Einkäufe eingetragen</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── MODAL ── -->
+<div class="overlay" id="overlay" onclick="overlayClick(event)">
+  <div class="modal" id="modal">
+
+    <div class="modal-title" id="modal-title">Ort hinzufügen</div>
+
+    <!-- ORTE FIELDS -->
+    <div id="f-orte">
+      <div class="fgroup">
+        <label>Kategorie</label>
+        <select id="in-kat"></select>
+      </div>
+      <div class="frow">
+        <div class="fgroup">
+          <label>Ort / Stadt</label>
+          <input id="in-ort-orte" type="text" placeholder="z.B. Kyoto">
+        </div>
+        <div class="fgroup">
+          <label>Name</label>
+          <input id="in-name-orte" type="text" placeholder="Name des Ortes">
+        </div>
+      </div>
+      <div class="fgroup">
+        <label>Was (Beschreibung)</label>
+        <textarea id="in-was" placeholder="Kurze Beschreibung…"></textarea>
+      </div>
+    </div>
+
+    <!-- EKI FIELDS -->
+    <div id="f-eki" style="display:none">
+      <div class="frow">
+        <div class="fgroup">
+          <label>Ort / Stadt</label>
+          <input id="in-ort-eki" type="text" placeholder="z.B. Osaka">
+        </div>
+        <div class="fgroup">
+          <label>Name des Bahnhofs</label>
+          <input id="in-name-eki" type="text" placeholder="z.B. Namba-Eki">
+        </div>
+      </div>
+    </div>
+
+    <!-- GOSHUIN FIELDS -->
+    <div id="f-goshuin" style="display:none">
+      <div class="frow">
+        <div class="fgroup">
+          <label>Ort / Stadt</label>
+          <input id="in-ort-goshuin" type="text" placeholder="z.B. Nara">
+        </div>
+        <div class="fgroup">
+          <label>Name (Schrein / Tempel)</label>
+          <input id="in-name-goshuin" type="text" placeholder="z.B. Kasuga Taisha">
+        </div>
+      </div>
+    </div>
+
+    <!-- KAUFEN FIELDS -->
+    <div id="f-kaufen" style="display:none">
+      <div class="fgroup">
+        <label>Artikel / Name</label>
+        <input id="in-name-kaufen" type="text" placeholder="Was möchte ich kaufen?">
+      </div>
+      <div class="frow">
+        <div class="fgroup">
+          <label>Was (Art / Beschreibung)</label>
+          <input id="in-was-kaufen" type="text" placeholder="z.B. Souvenir, Snack…">
+        </div>
+        <div class="fgroup">
+          <label>Wo (Geschäft / Ort)</label>
+          <input id="in-wo-kaufen" type="text" placeholder="z.B. Don Quijote">
+        </div>
+      </div>
+    </div>
+
+    <!-- COORDINATES (not for Kaufen) -->
+    <div id="f-coords">
+      <div class="fgroup">
+        <label>Google Maps Link oder Koordinaten</label>
+        <input id="in-gmaps" type="text"
+          placeholder="https://maps.google.com/... oder 35.6762, 139.6503"
+          oninput="tryParseCoords()">
+        <div class="coord-tip">📌 Tipp: Rechtsklick auf Google Maps → Koordinaten kopieren</div>
+      </div>
+
+      <button class="pick-map-btn" id="pick-btn" onclick="toggleMapPick()">
+        🗺️ Auf der Karte klicken um Koordinaten zu setzen
+      </button>
+
+      <div class="frow">
+        <div class="fgroup">
+          <label>Breitengrad (lat)</label>
+          <input id="in-lat" type="number" placeholder="35.6762" step="any">
+        </div>
+        <div class="fgroup">
+          <label>Längengrad (lng)</label>
+          <input id="in-lng" type="number" placeholder="139.6503" step="any">
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Abbrechen</button>
+      <button class="btn-save" onclick="saveEntry()">Hinzufügen</button>
+    </div>
+  </div>
+</div>
+
+<!-- LEAFLET -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+'use strict';
+
+// ─────────────────────────────────────────────
+// CONFIG
+// ─────────────────────────────────────────────
+const MAP_ID   = '1W0btxLlAqgy6OpJDJWmfPsOBlAVYgcs';
+const KML_RAW  = `https://www.google.com/maps/d/kml?forcekml=1&mid=${MAP_ID}`;
+const PROXIES  = [
+  `https://api.allorigins.win/raw?url=${encodeURIComponent(KML_RAW)}`,
+  `https://corsproxy.io/?${encodeURIComponent(KML_RAW)}`,
+];
+
+const CATS = {
+  'Shopping':            { icon:'🛍️',  color:'#E91E63' },
+  'Schreine & Tempel':   { icon:'⛩️',  color:'#F44336' },
+  'Burgen & Festungen':  { icon:'🏯',  color:'#795548' },
+  'Cafés':               { icon:'☕',  color:'#FF9800' },
+  'Restaurants':         { icon:'🍜',  color:'#FF5722' },
+  'Sehenswürdigkeiten':  { icon:'📸',  color:'#1565C0' },
+  'Museum':              { icon:'🏛️',  color:'#7B1FA2' },
+  'Zug':                 { icon:'🚃',  color:'#2E7D32' },
+  'Sonstiges':           { icon:'📍',  color:'#546E7A' },
+};
+
+// KML folder → category guesses
+const FOLDER_MAP = {
+  shopping:['Shopping'], laden:['Shopping'], shop:['Shopping'],
+  shrine:['Schreine & Tempel'], schrein:['Schreine & Tempel'],
+  tempel:['Schreine & Tempel'], temple:['Schreine & Tempel'],
+  burg:['Burgen & Festungen'], castle:['Burgen & Festungen'], festung:['Burgen & Festungen'],
+  café:['Cafés'], cafe:['Cafés'], coffee:['Cafés'], kaffee:['Cafés'],
+  restaurant:['Restaurants'], essen:['Restaurants'], food:['Restaurants'],
+  sehens:['Sehenswürdigkeiten'], sightseeing:['Sehenswürdigkeiten'], sight:['Sehenswürdigkeiten'],
+  museum:['Museum'],
+  zug:['Zug'], bahnhof:['Zug'], eki:['Zug'], train:['Zug'], station:['Zug'],
+  goshuin:['Schreine & Tempel'],
+};
+
+// ─────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────
+let map, pickingMode = false, pickTempMarker = null;
+let activeCat = 'all';
+let sortStates = {};
+
+const DB = { orte:[], eki:[], goshuin:[], kaufen:[] };
+
+// ─────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────
+(function init() {
+  initMap();
+  buildCatList();
+  loadStorage();
+  loadKML();
+  setTimeout(() => {
+    const hint = document.getElementById('map-hint');
+    hint.classList.add('hidden');
+  }, 4000);
+})();
+
+// ─────────────────────────────────────────────
+// MAP
+// ─────────────────────────────────────────────
+function initMap() {
+  map = L.map('map', { center:[36.5, 137.5], zoom:6 });
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 19,
+  }).addTo(map);
+
+  // Map click → coord picker
+  map.on('click', e => {
+    if (!pickingMode) return;
+    document.getElementById('in-lat').value = e.latlng.lat.toFixed(6);
+    document.getElementById('in-lng').value = e.latlng.lng.toFixed(6);
+    if (pickTempMarker) map.removeLayer(pickTempMarker);
+    pickTempMarker = L.circleMarker([e.latlng.lat, e.latlng.lng], {
+      radius:8, color:'#BC002D', fillColor:'#BC002D', fillOpacity:0.5, weight:2
+    }).addTo(map).bindPopup('Ausgewählter Punkt').openPopup();
+    // Turn off picking
+    toggleMapPick(false);
+  });
+}
+
+// ─────────────────────────────────────────────
+// KML LOADING
+// ─────────────────────────────────────────────
+async function loadKML() {
+  setStatus('Google Maps Pins werden geladen…');
+  for (const proxy of PROXIES) {
+    try {
+      const r = await fetch(proxy, { signal: AbortSignal.timeout(12000) });
+      if (!r.ok) continue;
+      const txt = await r.text();
+      if (!txt.includes('<kml') && !txt.includes('<KML')) continue;
+      parseKML(txt);
+      const total = DB.orte.length + DB.eki.length + DB.goshuin.length;
+      setStatus(`✓ ${total} Orte aus Google Maps geladen`);
+      return;
+    } catch(e) { /* try next */ }
+  }
+  setStatus('⚠ Google Maps konnte nicht geladen werden – KML manuell importieren oder Orte hinzufügen');
+}
+
+function parseKML(txt) {
+  const doc = new DOMParser().parseFromString(txt, 'text/xml');
+  const folders = [...doc.querySelectorAll('Folder')];
+
+  if (!folders.length) {
+    doc.querySelectorAll('Placemark').forEach(pm => ingestPlacemark(pm, 'Sonstiges', ''));
+  } else {
+    folders.forEach(folder => {
+      const fn = folder.querySelector(':scope > name')?.textContent?.trim() || '';
+      const cat = guessCategory(fn);
+      folder.querySelectorAll(':scope > Placemark').forEach(pm => ingestPlacemark(pm, cat, fn));
+    });
+  }
+  renderAll();
+  updateCounts();
+}
+
+function guessCategory(folderName) {
+  const lc = folderName.toLowerCase();
+  for (const [key, [cat]] of Object.entries(FOLDER_MAP)) {
+    if (lc.includes(key)) return cat;
+  }
+  return 'Sonstiges';
+}
+
+function ingestPlacemark(pm, cat, folderName) {
+  const name = pm.querySelector('name')?.textContent?.trim() || '';
+  const desc = pm.querySelector('description')?.textContent?.trim() || '';
+  const coordTxt = pm.querySelector('coordinates')?.textContent?.trim() || '';
+  if (!name || !coordTxt) return;
+
+  const parts = coordTxt.split(',');
+  const lng = parseFloat(parts[0]), lat = parseFloat(parts[1]);
+  if (isNaN(lat)||isNaN(lng)) return;
+
+  const id = `kml_${Math.random().toString(36).slice(2)}`;
+  const lfc = folderName.toLowerCase();
+  const wasText = stripHtml(desc);
+
+  // Route to correct table by folder name
+  if (lfc.includes('eki') || lfc.includes('bahnhof')) {
+    const e = { id, ort:'', name, lat, lng, visible:true, src:'kml' };
+    e.marker = makeMarker(e, 'eki');
+    DB.eki.push(e);
+  } else if (lfc.includes('goshuin')) {
+    const e = { id, ort:'', name, lat, lng, visible:true, src:'kml' };
+    e.marker = makeMarker(e, 'goshuin');
+    DB.goshuin.push(e);
+  } else {
+    const e = { id, kategorie:cat, ort:'', name, was:wasText, lat, lng, visible:true, src:'kml' };
+    e.marker = makeMarker(e, 'orte');
+    DB.orte.push(e);
+  }
+}
+
+// KML file import (fallback)
+async function importKML(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const txt = await file.text();
+  parseKML(txt);
+  setStatus(`✓ KML importiert – ${DB.orte.length + DB.eki.length + DB.goshuin.length} Orte geladen`);
+  input.value = '';
+}
+
+// ─────────────────────────────────────────────
+// MARKERS
+// ─────────────────────────────────────────────
+function iconHtml(type, cat) {
+  let e = '📍';
+  if (type === 'eki')     e = '🚃';
+  else if (type === 'goshuin') e = '⛩️';
+  else if (CATS[cat])    e = CATS[cat].icon;
+  return L.divIcon({
+    html:`<div style="font-size:22px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.35))">${e}</div>`,
+    className:'', iconSize:[26,26], iconAnchor:[13,13], popupAnchor:[0,-13],
+  });
+}
+
+function makeMarker(entry, type) {
+  if (!entry.lat||!entry.lng||isNaN(entry.lat)||isNaN(entry.lng)) return null;
+  const m = L.marker([entry.lat, entry.lng], { icon: iconHtml(type, entry.kategorie) }).addTo(map);
+  m.bindPopup(buildPopup(entry, type), { maxWidth:260 });
+  return m;
+}
+
+function buildPopup(entry, type) {
+  const cat = entry.kategorie;
+  const ci  = CATS[cat];
+  let html = `<div class="popup-name">${esc(entry.name)}</div>`;
+  if (entry.ort) html += `<div class="popup-ort">📍 ${esc(entry.ort)}</div>`;
+  if (entry.was) html += `<div class="popup-was">${esc(entry.was.slice(0,120))}${entry.was.length>120?'…':''}</div>`;
+  if (type==='eki') html += `<div class="popup-cat" style="background:#E8F5E9;color:#2E7D32">🚃 Bahnhof</div>`;
+  else if (type==='goshuin') html += `<div class="popup-cat" style="background:#FFEBEE;color:#C62828">⛩️ Goshuin</div>`;
+  else if (ci) html += `<div class="popup-cat" style="background:${ci.color}18;color:${ci.color}">${ci.icon} ${esc(cat)}</div>`;
+  return html;
+}
+
+function refreshMarker(entry, type) {
+  if (entry.marker) {
+    entry.marker.setIcon(iconHtml(type, entry.kategorie));
+    entry.marker.setPopupContent(buildPopup(entry, type));
+  }
+}
+
+// ─────────────────────────────────────────────
+// CATEGORIES
+// ─────────────────────────────────────────────
+function buildCatList() {
+  const list = document.getElementById('cat-list');
+  list.innerHTML = '';
+  for (const [name, info] of Object.entries(CATS)) {
+    const key = safeName(name);
+    const btn = document.createElement('button');
+    btn.className = 'cat-btn';
+    btn.dataset.cat = name;
+    btn.innerHTML = `
+      <span class="cat-icon">${info.icon}</span>
+      <span class="cat-name">${name}</span>
+      <span class="cat-count" id="cnt-${key}">0</span>`;
+    btn.onclick = () => filterCat(name, btn);
+    list.appendChild(btn);
+  }
+
+  // Build modal select
+  const sel = document.getElementById('in-kat');
+  sel.innerHTML = '';
+  for (const [name, info] of Object.entries(CATS)) {
+    const opt = new Option(`${info.icon}  ${name}`, name);
+    sel.appendChild(opt);
+  }
+}
+
+function filterCat(cat, btn) {
+  activeCat = cat;
+  document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderOrte();
+  // Update marker visibility
+  DB.orte.forEach(e => {
+    if (!e.marker) return;
+    const show = e.visible && (cat==='all' || e.kategorie===cat);
+    if (show) { if (!map.hasLayer(e.marker)) e.marker.addTo(map); }
+    else       { if ( map.hasLayer(e.marker)) map.removeLayer(e.marker); }
+  });
+}
+
+function updateCounts() {
+  const allN = DB.orte.length + DB.eki.length + DB.goshuin.length;
+  setText('cnt-all', allN);
+  for (const name of Object.keys(CATS)) {
+    const n = DB.orte.filter(e => e.kategorie===name).length;
+    setText(`cnt-${safeName(name)}`, n);
+  }
+  setText('cnt-orte', DB.orte.length);
+  setText('cnt-eki', DB.eki.length);
+  setText('cnt-goshuin', DB.goshuin.length);
+  setText('cnt-kaufen', DB.kaufen.length);
+}
+
+// ─────────────────────────────────────────────
+// RENDER TABLES
+// ─────────────────────────────────────────────
+function renderAll() {
+  renderOrte();
+  renderEki();
+  renderGoshuin();
+  renderKaufen();
+  updateCounts();
+}
+
+function renderOrte() {
+  const items = activeCat==='all' ? DB.orte : DB.orte.filter(e=>e.kategorie===activeCat);
+  const tbody = document.getElementById('tbody-orte');
+  tbody.innerHTML = '';
+  items.forEach(e => {
+    const ci = CATS[e.kategorie] || CATS['Sonstiges'];
+    const tr = document.createElement('tr');
+    if (!e.visible) tr.classList.add('is-hidden');
+    tr.innerHTML = `
+      <td class="col-chk">
+        <input type="checkbox" ${e.visible?'':'checked'}
+          onchange="toggleVis('orte','${e.id}',this)">
+      </td>
+      <td><span class="cat-tag" style="background:${ci.color}18;color:${ci.color}">${ci.icon} ${esc(e.kategorie||'')}</span></td>
+      <td>${esc(e.ort||'—')}</td>
+      <td><strong>${esc(e.name)}</strong></td>
+      <td><span class="was-cell" title="${esc(e.was||'')}">${esc(e.was||'—')}</span></td>
+      <td class="col-del"><button class="del-btn" onclick="del('orte','${e.id}')">✕</button></td>`;
+    tbody.appendChild(tr);
+  });
+  const empty = document.getElementById('empty-orte');
+  empty.style.display = items.length ? 'none' : 'block';
+}
+
+function renderEki() {
+  const tbody = document.getElementById('tbody-eki');
+  tbody.innerHTML = '';
+  DB.eki.forEach(e => {
+    const tr = document.createElement('tr');
+    if (!e.visible) tr.classList.add('is-hidden');
+    tr.innerHTML = `
+      <td class="col-chk">
+        <input type="checkbox" ${e.visible?'':'checked'}
+          onchange="toggleVis('eki','${e.id}',this)">
+      </td>
+      <td>${esc(e.ort||'—')}</td>
+      <td><strong>${esc(e.name)}</strong></td>
+      <td class="col-del"><button class="del-btn" onclick="del('eki','${e.id}')">✕</button></td>`;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('empty-eki').style.display = DB.eki.length ? 'none':'block';
+}
+
+function renderGoshuin() {
+  const tbody = document.getElementById('tbody-goshuin');
+  tbody.innerHTML = '';
+  DB.goshuin.forEach(e => {
+    const tr = document.createElement('tr');
+    if (!e.visible) tr.classList.add('is-hidden');
+    tr.innerHTML = `
+      <td class="col-chk">
+        <input type="checkbox" ${e.visible?'':'checked'}
+          onchange="toggleVis('goshuin','${e.id}',this)">
+      </td>
+      <td>${esc(e.ort||'—')}</td>
+      <td><strong>${esc(e.name)}</strong></td>
+      <td class="col-del"><button class="del-btn" onclick="del('goshuin','${e.id}')">✕</button></td>`;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('empty-goshuin').style.display = DB.goshuin.length ? 'none':'block';
+}
+
+function renderKaufen() {
+  const tbody = document.getElementById('tbody-kaufen');
+  tbody.innerHTML = '';
+  DB.kaufen.forEach(e => {
+    const tr = document.createElement('tr');
+    if (!e.visible) tr.classList.add('gekauft');
+    tr.innerHTML = `
+      <td class="col-chk">
+        <input type="checkbox" ${e.visible?'':'checked'}
+          onchange="toggleKaufen('${e.id}',this)" title="Gekauft">
+      </td>
+      <td><strong>${esc(e.name)}</strong></td>
+      <td><span class="was-cell">${esc(e.was||'—')}</span></td>
+      <td>${esc(e.wo||'—')}</td>
+      <td class="col-del"><button class="del-btn" onclick="del('kaufen','${e.id}')">✕</button></td>`;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('empty-kaufen').style.display = DB.kaufen.length ? 'none':'block';
+}
+
+// ─────────────────────────────────────────────
+// TOGGLE VISIBILITY
+// ─────────────────────────────────────────────
+function toggleVis(table, id, cb) {
+  const visible = !cb.checked;
+  const entry = DB[table].find(e=>e.id===id);
+  if (!entry) return;
+  entry.visible = visible;
+
+  if (entry.marker) {
+    const showOnMap = visible && (activeCat==='all' || table!=='orte' || entry.kategorie===activeCat);
+    if (showOnMap) { if (!map.hasLayer(entry.marker)) entry.marker.addTo(map); }
+    else            { if (  map.hasLayer(entry.marker)) map.removeLayer(entry.marker); }
+  }
+
+  cb.closest('tr').classList.toggle('is-hidden', !visible);
+  saveStorage();
+}
+
+function toggleKaufen(id, cb) {
+  const entry = DB.kaufen.find(e=>e.id===id);
+  if (!entry) return;
+  entry.visible = !cb.checked;
+  cb.closest('tr').classList.toggle('gekauft', !entry.visible);
+  saveStorage();
+}
+
+// ─────────────────────────────────────────────
+// SORT
+// ─────────────────────────────────────────────
+function sortTable(table, col, th) {
+  const cur = sortStates[table] || {};
+  const dir = (cur.col===col && cur.dir==='asc') ? 'desc' : 'asc';
+  sortStates[table] = { col, dir };
+
+  th.closest('thead').querySelectorAll('th').forEach(t => {
+    t.classList.remove('sort-asc','sort-desc');
+  });
+  th.classList.add(dir==='asc' ? 'sort-asc' : 'sort-desc');
+
+  DB[table].sort((a,b) => {
+    const av = (a[col]||'').toLowerCase();
+    const bv = (b[col]||'').toLowerCase();
+    return dir==='asc' ? av.localeCompare(bv,'de') : bv.localeCompare(av,'de');
+  });
+  renderAll();
+}
+
+// ─────────────────────────────────────────────
+// DELETE
+// ─────────────────────────────────────────────
+function del(table, id) {
+  const idx = DB[table].findIndex(e=>e.id===id);
+  if (idx===-1) return;
+  const entry = DB[table][idx];
+  if (entry.marker && map.hasLayer(entry.marker)) map.removeLayer(entry.marker);
+  DB[table].splice(idx,1);
+  renderAll();
+  saveStorage();
+}
+
+// ─────────────────────────────────────────────
+// MODAL
+// ─────────────────────────────────────────────
+let modalType = 'orte';
+
+function openModal(type) {
+  modalType = type;
+  const titles = {
+    orte:'📍 Ort hinzufügen', eki:'🚃 Bahnhof hinzufügen',
+    goshuin:'御朱印 Goshuin-Ort hinzufügen', kaufen:'🛍️ Einkauf hinzufügen'
+  };
+  document.getElementById('modal-title').textContent = titles[type];
+
+  ['orte','eki','goshuin','kaufen'].forEach(t => {
+    document.getElementById(`f-${t}`).style.display = (t===type) ? '' : 'none';
+  });
+  document.getElementById('f-coords').style.display = (type==='kaufen') ? 'none' : '';
+
+  // Clear all inputs
+  document.querySelectorAll('#modal input, #modal textarea, #modal select').forEach(el => {
+    if (el.tagName==='SELECT') el.selectedIndex = 0;
+    else el.value = '';
+  });
+
+  if (pickTempMarker) { map.removeLayer(pickTempMarker); pickTempMarker=null; }
+  if (pickingMode) toggleMapPick(false);
+
+  document.getElementById('overlay').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('overlay').classList.remove('open');
+  if (pickingMode) toggleMapPick(false);
+  if (pickTempMarker) { map.removeLayer(pickTempMarker); pickTempMarker=null; }
+}
+
+function overlayClick(e) {
+  if (e.target===document.getElementById('overlay')) closeModal();
+}
+
+// ─────────────────────────────────────────────
+// COORDINATE PICKER
+// ─────────────────────────────────────────────
+function toggleMapPick(forceOff) {
+  if (forceOff===false || pickingMode) {
+    pickingMode = false;
+    document.body.classList.remove('picking-mode');
+    document.getElementById('pick-btn').classList.remove('active');
+    document.getElementById('pick-btn').textContent = '🗺️ Auf der Karte klicken um Koordinaten zu setzen';
+  } else {
+    pickingMode = true;
+    document.body.classList.add('picking-mode');
+    document.getElementById('pick-btn').classList.add('active');
+    document.getElementById('pick-btn').textContent = '✕ Kartenklick abbrechen';
+    document.getElementById('overlay').classList.remove('open');
+  }
+}
+
+function tryParseCoords() {
+  const v = document.getElementById('in-gmaps').value.trim();
+
+  // @lat,lng (Google Maps URL)
+  let m = v.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+  if (m) { setCoords(m[1],m[2]); return; }
+
+  // ?q=lat,lng
+  m = v.match(/[?&]q=(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+  if (m) { setCoords(m[1],m[2]); return; }
+
+  // "lat, lng" plain
+  m = v.match(/^(-?\d+\.?\d*)[,\s]+(-?\d+\.?\d*)$/);
+  if (m) { setCoords(m[1],m[2]); return; }
+}
+
+function setCoords(lat, lng) {
+  document.getElementById('in-lat').value = parseFloat(lat).toFixed(6);
+  document.getElementById('in-lng').value = parseFloat(lng).toFixed(6);
+}
+
+// ─────────────────────────────────────────────
+// SAVE ENTRY
+// ─────────────────────────────────────────────
+function saveEntry() {
+  const id = `user_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
+
+  if (modalType==='orte') {
+    const e = {
+      id,
+      kategorie: document.getElementById('in-kat').value,
+      ort:   document.getElementById('in-ort-orte').value.trim(),
+      name:  document.getElementById('in-name-orte').value.trim(),
+      was:   document.getElementById('in-was').value.trim(),
+      lat:   parseFloat(document.getElementById('in-lat').value),
+      lng:   parseFloat(document.getElementById('in-lng').value),
+      visible: true, src:'user',
+    };
+    if (!e.name) return alert('Bitte einen Namen eingeben.');
+    e.marker = makeMarker(e, 'orte');
+    DB.orte.push(e);
+  }
+
+  else if (modalType==='eki') {
+    const e = {
+      id,
+      ort:  document.getElementById('in-ort-eki').value.trim(),
+      name: document.getElementById('in-name-eki').value.trim(),
+      lat:  parseFloat(document.getElementById('in-lat').value),
+      lng:  parseFloat(document.getElementById('in-lng').value),
+      visible: true, src:'user',
+    };
+    if (!e.name) return alert('Bitte einen Namen eingeben.');
+    e.marker = makeMarker(e, 'eki');
+    DB.eki.push(e);
+  }
+
+  else if (modalType==='goshuin') {
+    const e = {
+      id,
+      ort:  document.getElementById('in-ort-goshuin').value.trim(),
+      name: document.getElementById('in-name-goshuin').value.trim(),
+      lat:  parseFloat(document.getElementById('in-lat').value),
+      lng:  parseFloat(document.getElementById('in-lng').value),
+      visible: true, src:'user',
+    };
+    if (!e.name) return alert('Bitte einen Namen eingeben.');
+    e.marker = makeMarker(e, 'goshuin');
+    DB.goshuin.push(e);
+  }
+
+  else if (modalType==='kaufen') {
+    const e = {
+      id,
+      name: document.getElementById('in-name-kaufen').value.trim(),
+      was:  document.getElementById('in-was-kaufen').value.trim(),
+      wo:   document.getElementById('in-wo-kaufen').value.trim(),
+      visible: true, src:'user',
+    };
+    if (!e.name) return alert('Bitte einen Namen eingeben.');
+    DB.kaufen.push(e);
+  }
+
+  closeModal();
+  renderAll();
+  saveStorage();
+}
+
+// ─────────────────────────────────────────────
+// LOCAL STORAGE
+// ─────────────────────────────────────────────
+const LS_KEY = 'japan_v2';
+
+function saveStorage() {
+  try {
+    const payload = {};
+    for (const t of ['orte','eki','goshuin','kaufen']) {
+      payload[t] = DB[t].map(({marker, ...rest}) => rest);
+    }
+    localStorage.setItem(LS_KEY, JSON.stringify(payload));
+  } catch(e) {}
+}
+
+function loadStorage() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    for (const t of ['orte','eki','goshuin','kaufen']) {
+      if (!saved[t]) continue;
+      saved[t].forEach(entry => {
+        if (t!=='kaufen') entry.marker = makeMarker(entry, t);
+        // Restore visibility on marker
+        if (entry.marker && !entry.visible) map.removeLayer(entry.marker);
+        DB[t].push(entry);
+      });
+    }
+    renderAll();
+  } catch(e) {}
+}
+
+// ─────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────
+function esc(s) {
+  return String(s||'')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function stripHtml(h) {
+  const d = document.createElement('div');
+  d.innerHTML = h;
+  return (d.textContent||d.innerText||'').trim();
+}
+function setText(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = val;
+}
+function setStatus(msg) {
+  setText('status-text', msg);
+}
+function safeName(s) {
+  return s.replace(/[^a-zA-Z0-9]/g,'_');
+}
+</script>
+</body>
+</html>
