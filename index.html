@@ -137,6 +137,13 @@ body {
 }
 .kml-import-wrap label { cursor: pointer; color: var(--red); font-weight: 600; text-decoration: underline; }
 #kml-file-input { display: none; }
+.reload-btn {
+  width: 100%; padding: 7px 10px; background: none;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  font-family: inherit; font-size: 11.5px; color: var(--text-muted);
+  cursor: pointer; transition: all 0.13s; text-align: center;
+}
+.reload-btn:hover { border-color: var(--red); color: var(--red); background: var(--red-light); }
 
 /* ── TABLES ── */
 .tables-row { display: grid; grid-template-columns: 2.2fr 1fr 1fr 1.2fr; gap: 16px; align-items: start; }
@@ -307,6 +314,9 @@ body.picking-mode .leaflet-interactive { cursor: crosshair !important; }
         <label for="kml-file-input">Datei wählen</label>
         <input type="file" id="kml-file-input" accept=".kml,.kmz" onchange="importKML(this)">
       </div>
+      <button class="reload-btn" onclick="reloadFromGoogleMaps()" title="Daten frisch aus Google Maps laden (löscht lokale Änderungen)">
+        🔄 Google Maps neu laden
+      </button>
       <div id="layer-info" class="layer-info" style="display:none"></div>
     </div>
   </div>
@@ -489,8 +499,15 @@ let geoRunning = false;
 (function init() {
   initMap();
   buildCatUI();
-  loadStorage();
-  loadKML();
+  const hasData = loadStorage();
+  if (hasData) {
+    // Data already in localStorage — skip KML to preserve all edits
+    const total = DB.orte.length + DB.eki.length + DB.goshuin.length;
+    setStatus(`✓ ${total} gespeicherte Orte geladen`);
+  } else {
+    // First visit or after reset — load from Google Maps
+    loadKML();
+  }
   setTimeout(() => document.getElementById('map-hint').classList.add('hidden'), 4000);
 })();
 
@@ -526,11 +543,26 @@ async function loadKML() {
       parseKML(txt);
       const total = DB.orte.length + DB.eki.length + DB.goshuin.length;
       setStatus(`✓ ${total} Orte aus Google Maps geladen – Ortsname wird automatisch ergänzt…`);
+      saveStorage(); // Persist KML data immediately so edits survive reloads
       scheduleGeocoding();
       return;
     } catch(e) { /* try next */ }
   }
   setStatus('⚠ Google Maps konnte nicht geladen werden — KML manuell importieren oder Orte manuell hinzufügen');
+}
+
+// Force-reload from Google Maps (clears all local data first)
+function reloadFromGoogleMaps() {
+  if (!confirm('Alle Einträge werden neu aus Google Maps geladen.\n\nAchtung: Kategorie-Änderungen, manuell hinzugefügte Orte und Einkaufsliste gehen verloren!\n\nFortfahren?')) return;
+  localStorage.removeItem(LS_KEY);
+  // Remove all markers from map
+  for (const t of ['orte','eki','goshuin']) {
+    DB[t].forEach(e => { if (e.marker && map.hasLayer(e.marker)) map.removeLayer(e.marker); });
+  }
+  DB.orte=[]; DB.eki=[]; DB.goshuin=[]; DB.kaufen=[];
+  geoQueue.length = 0;
+  renderAll();
+  loadKML();
 }
 
 function parseKML(txt) {
@@ -1113,33 +1145,47 @@ function saveEntry() {
 }
 
 // ─── STORAGE ──────────────────────────────────────────────────────────────────
-const LS_KEY = 'japan_v3';
+const LS_KEY = 'japan_v4';
 function saveStorage() {
   try {
-    const payload = {};
+    const payload = { _savedAt: new Date().toISOString() };
     for (const t of ['orte','eki','goshuin','kaufen']) {
-      payload[t] = DB[t].map(({marker,...rest})=>rest);
+      // Strip the Leaflet marker object (not serializable) before saving
+      payload[t] = DB[t].map(({marker, ...rest}) => rest);
     }
     localStorage.setItem(LS_KEY, JSON.stringify(payload));
-  } catch(e){}
+  } catch(e) {
+    console.warn('Speichern fehlgeschlagen:', e);
+  }
 }
+
+// Returns true if data was found and loaded, false if storage was empty
 function loadStorage() {
   try {
     const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return;
+    if (!raw) return false;
     const saved = JSON.parse(raw);
+    // Guard: must have at least one table
+    const hasEntries = ['orte','eki','goshuin','kaufen'].some(t => saved[t]?.length > 0);
+    if (!hasEntries) return false;
+
     for (const t of ['orte','eki','goshuin','kaufen']) {
       if (!saved[t]) continue;
       saved[t].forEach(entry => {
-        if (t!=='kaufen') {
+        if (t !== 'kaufen') {
           entry.marker = makeMarker(entry, t);
+          // Restore hidden state on marker
           if (entry.marker && !entry.visible) map.removeLayer(entry.marker);
         }
         DB[t].push(entry);
       });
     }
     renderAll();
-  } catch(e){}
+    return true;
+  } catch(e) {
+    console.warn('Laden fehlgeschlagen:', e);
+    return false;
+  }
 }
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
